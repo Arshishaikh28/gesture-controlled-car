@@ -1,0 +1,74 @@
+#include <Wire.h>
+#include <ESP8266WiFi.h>
+
+// MPU6050 variables
+const int MPU_addr = 0x68;
+int16_t AcX, AcY, AcZ;
+
+// WiFi (Receiver ESP8266 details)
+const char* ssid = "ESP_CAR";        // Receiver hotspot name
+const char* password = "12345678";   // Password
+
+WiFiClient client;
+const char* host = "192.168.4.1";    // Receiver IP
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+
+  // Initialize MPU6050
+  Wire.beginTransmission(MPU_addr);
+  Wire.write(0x6B);
+  Wire.write(0);
+  Wire.endTransmission(true);
+
+  // Connect to Receiver ESP8266
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting...");
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nConnected to Receiver");
+}
+
+void loop() {
+
+  // Read MPU6050 values
+  Wire.beginTransmission(MPU_addr);
+  Wire.write(0x3B);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU_addr, 6, true);
+
+  AcX = Wire.read() << 8 | Wire.read();
+  AcY = Wire.read() << 8 | Wire.read();
+  AcZ = Wire.read() << 8 | Wire.read();
+
+  String command = "S"; // Stop by default
+
+  // Gesture logic
+  if (AcY < -10000) {
+    command = "F"; // Forward
+  } 
+  else if (AcY > 10000) {
+    command = "B"; // Backward
+  } 
+  else if (AcX > 10000) {
+    command = "R"; // Right
+  } 
+  else if (AcX < -10000) {
+    command = "L"; // Left
+  }
+
+  Serial.println(command);
+
+  // Send data to receiver
+  if (client.connect(host, 80)) {
+    client.print(command);
+    client.stop();
+  }
+
+  delay(200);
+}
