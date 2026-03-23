@@ -1,0 +1,100 @@
+#include <ESP8266WiFi.h>
+
+// Motor pins (L298N)
+#define IN1 D1
+#define IN2 D2
+#define IN3 D3
+#define IN4 D4
+
+WiFiServer server(80);
+
+const char* ssid = "ESP_CAR";       
+const char* password = "12345678";
+
+void setup() {
+  Serial.begin(115200);
+
+  // Motor pins setup
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  stopCar();
+
+  // Start ESP8266 as Access Point
+  WiFi.softAP(ssid, password);
+  Serial.println("Access Point Started");
+
+  server.begin();
+}
+
+void loop() {
+  WiFiClient client = server.available();
+
+  if (client) {
+    String command = "";
+
+    while (client.available()) {
+      char c = client.read();
+      command += c;
+    }
+
+    Serial.println(command);
+
+    // Control car based on command
+    if (command == "F") {
+      forward();
+    } 
+    else if (command == "B") {
+      backward();
+    } 
+    else if (command == "L") {
+      left();
+    } 
+    else if (command == "R") {
+      right();
+    } 
+    else {
+      stopCar();
+    }
+
+    client.stop();
+  }
+}
+
+// Motor functions
+void forward() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void backward() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void left() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void right() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void stopCar() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
