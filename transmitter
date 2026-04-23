@@ -1,74 +1,61 @@
+#include <esp_now.h>
+#include <WiFi.h>
 #include <Wire.h>
-#include <ESP8266WiFi.h>
+#include <MPU6050_tockn.h>
 
-// MPU6050 variables
-const int MPU_addr = 0x68;
-int16_t AcX, AcY, AcZ;
+MPU6050 mpu6050(Wire);
 
-// WiFi (Receiver ESP8266 details)
-const char* ssid = "ESP_CAR";        // Receiver hotspot name
-const char* password = "12345678";   // Password
+typedef struct {
+  char cmd;
+} Data;
 
-WiFiClient client;
-const char* host = "192.168.4.1";    // Receiver IP
+Data sendData;
+
+uint8_t receiverMAC[] = {0x70, 0x4B, 0xCA, 0x8E, 0xDD, 0xA4};
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin();
+  WiFi.mode(WIFI_STA);
 
-  // Initialize MPU6050
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x6B);
-  Wire.write(0);
-  Wire.endTransmission(true);
-
-  // Connect to Receiver ESP8266
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting...");
+  Wire.begin(21, 22);
+  // Increase I2C speed to 400kHz for instant data retrieval
+  Wire.setClock(400000); 
   
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+  mpu6050.begin();
+  
+  Serial.println("Hold STILL for instant calibration...");
+  delay(2000); 
+  mpu6050.calcGyroOffsets(true);
 
-  Serial.println("\nConnected to Receiver");
+  if (esp_now_init() != ESP_OK) return;
+
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, receiverMAC, 6);
+  peer.channel = 0;  
+  peer.encrypt = false;
+  esp_now_add_peer(&peer);
 }
 
 void loop() {
+  
+  mpu6050.update();
+  
+  // Directly using the raw angles for zero delay
+  float adjX = mpu6050.getAngleX(); 
+  float adjY = mpu6050.getAngleY() + 90.0; 
 
-  // Read MPU6050 values
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x3B);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_addr, 6, true);
+ 
+  int threshold = 20; 
 
-  AcX = Wire.read() << 8 | Wire.read();
-  AcY = Wire.read() << 8 | Wire.read();
-  AcZ = Wire.read() << 8 | Wire.read();
+  if (adjY > threshold)       sendData.cmd = 'F'; 
+  else if (adjY < -threshold) sendData.cmd = 'B'; 
+  else if (adjX > threshold)  sendData.cmd = 'R'; 
+  else if (adjX < -threshold) sendData.cmd = 'L'; 
+  else                        sendData.cmd = 'S'; 
 
-  String command = "S"; // Stop by default
+  // Send immediately
+  esp_now_send(receiverMAC, (uint8_t*)&sendData, sizeof(sendData));
 
-  // Gesture logic
-  if (AcY < -10000) {
-    command = "F"; // Forward
-  } 
-  else if (AcY > 10000) {
-    command = "B"; // Backward
-  } 
-  else if (AcX > 10000) {
-    command = "R"; // Right
-  } 
-  else if (AcX < -10000) {
-    command = "L"; // Left
-  }
-
-  Serial.println(command);
-
-  // Send data to receiver
-  if (client.connect(host, 80)) {
-    client.print(command);
-    client.stop();
-  }
-
-  delay(200);
+  // Reduced delay to 30ms for "Real-Time" feel
+  delay(30); 
 }
