@@ -74,10 +74,6 @@ This project presents a Gesture-Controlled Robotic Car using IoT technology. It 
 
 
 
-## 🙏 Acknowledgement
-I would like to thank my project guide and faculty for their support and guidance. 
-
-
 ## 📚 References
 - Internet of Things: A Hands-On Approach – Arshdeep Bahga
 - Kolban’s Book on ESP8266 – Neil Kolban
